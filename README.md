@@ -31,7 +31,7 @@
 Для локального запуска нужны только Docker и Docker Compose.
 
 ```bash
-git clone <url_репозитория>
+git clone https://github.com/ifmain/warehouse
 cd warehouse
 docker-compose up -d --build
 
