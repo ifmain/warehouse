@@ -1,7 +1,0 @@
-{
-    "ignore_dirs": [
-        ".*",
-        "__*"
-    ],
-    "ignore_files": []
-}
