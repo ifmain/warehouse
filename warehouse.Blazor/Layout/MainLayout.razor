@@ -1,0 +1,46 @@
+﻿@inherits LayoutComponentBase
+
+<div class="layout">
+    <aside class="sidebar">
+        <div class="logo">Склад Техники</div>
+        <nav>
+            <NavLink class="nav-btn" href="/" Match="NavLinkMatch.All" ActiveClass="active">
+                Позиции
+            </NavLink>
+            <NavLink class="nav-btn" href="/dictionaries" ActiveClass="active">
+                Справочники
+            </NavLink>
+        </nav>
+    </aside>
+
+    <main class="content">
+        @Body
+    </main>
+</div>
+
+@if (IsModalVisible)
+{
+    <div class="modal-backdrop">
+        <div class="modal">
+            <h3>Форма</h3>
+            <form>
+                <div class="modal-body">
+                    @* Контент модалки *@
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-secondary" @onclick="CloseModal">Отмена</button>
+                    <button type="submit" class="btn-primary">Сохранить</button>
+                </div>
+            </form>
+        </div>
+    </div>
+}
+
+@code {
+    private bool IsModalVisible = false;
+
+    private void CloseModal()
+    {
+        IsModalVisible = false;
+    }
+}

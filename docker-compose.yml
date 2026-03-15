@@ -1,0 +1,45 @@
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: adm_pass_augs7fg97SG0g08G0g!
+      POSTGRES_DB: warehouse_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d warehouse_db"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: warehouse.API/Dockerfile
+    environment:
+      - ConnectionStrings__DefaultConnection=Host=db;Port=5432;Database=warehouse_db;Username=postgres;Password=adm_pass_augs7fg97SG0g08G0g!
+    ports:
+      - "5213:8080"
+    volumes:
+      - ./uploads_data:/app/wwwroot/uploads
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: .
+      dockerfile: warehouse.Blazor/Dockerfile
+    ports:
+      - "80:80"
+    restart: always
+    depends_on:
+      - api
+
+volumes:
+  pgdata:

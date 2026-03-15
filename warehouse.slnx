@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="warehouse.API/warehouse.API.csproj" />
+  <Project Path="warehouse.Blazor/warehouse.Blazor.csproj" />
+  <Project Path="warehouse.Shared/warehouse.Shared.csproj" />
+</Solution>

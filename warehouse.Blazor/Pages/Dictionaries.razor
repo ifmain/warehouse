@@ -1,0 +1,276 @@
+@page "/dictionaries"
+@using warehouse.Shared.Models
+@inject warehouse.Shared.IWarehouseApi Api
+@inject IJSRuntime JS
+@inject HttpClient Http
+
+@using Microsoft.AspNetCore.SignalR.Client
+@implements IAsyncDisposable
+
+<header class="page-header">
+    <h2>Справочники</h2>
+</header>
+
+<div class="dictionaries-grid">
+    <div class="dict-card">
+        <div class="dict-header">
+            <h3>Типы техники</h3>
+            <button class="btn-sm" @onclick='() => OpenModal(1, "Добавить тип техники")'>+ Тип</button>
+        </div>
+        <table>
+            <thead><tr><th>ID</th><th>Название</th><th>Создано</th><th>Обновлено</th><th>Действия</th></tr></thead>
+            <tbody>
+                @if (appliances != null)
+                {
+                    @foreach (var app in appliances)
+                    {
+                        <tr>
+                            <td>@app.Id</td>
+                            <td>@app.Name</td>
+                            <td>@app.CreatedAt.ToString("dd.MM.yyyy HH:mm")</td>
+                            <td>@app.UpdatedAt.ToString("dd.MM.yyyy HH:mm")</td>
+                            <td>
+                                <button class="btn-sm" @onclick='() => OpenEditModal(1, "Редактировать тип", app.Id, app.Name, app.Description)'>Ред.</button>
+                                <button class="text-danger" @onclick="() => DeleteEntity(1, app.Id)">Удалить</button>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <div class="dict-card">
+        <div class="dict-header">
+            <h3>Производители</h3>
+            <button class="btn-sm" @onclick='() => OpenModal(2, "Добавить производителя")'>+ Бренд</button>
+        </div>
+        <table>
+            <thead><tr><th>ID</th><th>Название</th><th>Страна</th><th>Создано</th><th>Обновлено</th><th>Действия</th></tr></thead>
+            <tbody>
+                @if (manufacturers != null)
+                {
+                    @foreach (var m in manufacturers)
+                    {
+                        <tr>
+                            <td>@m.Id</td>
+                            <td>@m.Name</td>
+                            <td>@(m.Country?.Name ?? "—")</td>
+                            <td>@m.CreatedAt.ToString("dd.MM.yyyy HH:mm")</td>
+                            <td>@m.UpdatedAt.ToString("dd.MM.yyyy HH:mm")</td>
+                            <td>
+                                <button class="btn-sm" @onclick='() => OpenEditModal(2, "Редактировать бренд", m.Id, m.Name, m.Description, m.CountryID)'>Ред.</button>
+                                <button class="text-danger" @onclick="() => DeleteEntity(2, m.Id)">Удалить</button>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <div class="dict-card">
+        <div class="dict-header">
+            <h3>Страны</h3>
+            <button class="btn-sm" @onclick='() => OpenModal(3, "Добавить страну")'>+ Страна</button>
+        </div>
+        <table>
+            <thead><tr><th>ID</th><th>Название</th><th>Действия</th></tr></thead>
+            <tbody>
+                @if (countries != null)
+                {
+                    @foreach (var c in countries)
+                    {
+                        <tr>
+                            <td>@c.Id</td>
+                            <td>@c.Name</td>
+                            <td>
+                                @*<button class="btn-sm" @onclick='() => OpenEditModal(3, "Редактировать страну", c.Id, c.Name)'>Ред.</button>*@
+                                <button class="text-danger" @onclick="() => DeleteEntity(3, c.Id)">Удалить</button>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@if (isModalOpen)
+{
+    <div class="modal-backdrop">
+        <div class="modal">
+            <h3>@modalTitle</h3>
+            <form @onsubmit="SaveDictionaryItem">
+                <div class="modal-body">
+                    <div class="filter-group">
+                        <label>Название</label>
+                        <input type="text" @bind="newDictValue" required />
+                    </div>
+
+                    @if (currentModalType == 1 || currentModalType == 2)
+                    {
+                        <div class="filter-group">
+                            <label>Описание</label>
+                            <input type="text" @bind="newDictDesc" />
+                        </div>
+                    }
+
+                    @if (currentModalType == 2)
+                    {
+                        <div class="filter-group">
+                            <label>Страна</label>
+                            <select @bind="selectedCountryForManufacturer" required>
+                                <option value="0" disabled>Выберите страну</option>
+                                @if (countries != null)
+                                {
+                                    @foreach (var c in countries)
+                                    {
+                                        <option value="@c.Id">@c.Name</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-secondary" @onclick="CloseModal">Отмена</button>
+                    <button type="submit" class="btn-primary">Сохранить</button>
+                </div>
+            </form>
+        </div>
+    </div>
+}
+
+@code {
+    private List<DatabaseAppliances>? appliances;
+    private List<DatabaseManufacturer>? manufacturers;
+    private List<DatabaseCountry>? countries;
+
+    private bool isModalOpen = false;
+    private string modalTitle = "";
+    private int currentModalType = 0;
+    
+    private int editingItemId = 0; 
+
+    private string newDictValue = "";
+    private string newDictDesc = "";
+    private int selectedCountryForManufacturer = 0;
+
+    private HubConnection? hubConnection;
+    private string apiBase => Http.BaseAddress?.ToString().TrimEnd('/') ?? "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl($"{apiBase}/updateHub")
+            .Build();
+
+        hubConnection.On("DataChanged", async () =>
+        {
+            await LoadData();
+            await InvokeAsync(StateHasChanged);
+        });
+
+        await hubConnection.StartAsync();
+    }
+
+    private async Task LoadData()
+    {
+        appliances = await Api.GetAppliances();
+        manufacturers = await Api.GetManufacturers();
+        countries = await Api.GetCountries();
+    }
+
+    // создание
+    private void OpenModal(int type, string title)
+    {
+        currentModalType = type;
+        modalTitle = title;
+        editingItemId = 0;
+        newDictValue = "";
+        newDictDesc = "";
+        selectedCountryForManufacturer = 0;
+        isModalOpen = true;
+    }
+
+    //редактирование
+    private void OpenEditModal(int type, string title, int id, string name, string desc = "", int countryId = 0)
+    {
+        currentModalType = type;
+        modalTitle = title;
+        editingItemId = id;
+        newDictValue = name;
+        newDictDesc = desc;
+        selectedCountryForManufacturer = countryId;
+        isModalOpen = true;
+    }
+
+    private void CloseModal() => isModalOpen = false;
+
+    private async Task SaveDictionaryItem()
+    {
+        if (currentModalType == 2 && selectedCountryForManufacturer == 0)
+        {
+            await JS.InvokeVoidAsync("alert", "Пожалуйста, выберите страну для производителя!"); 
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(newDictValue))
+        {
+            await JS.InvokeVoidAsync("alert", "Название не может быть пустым!"); 
+            return;
+        }
+
+        try
+        {
+            if (currentModalType == 1)
+            {
+                var app = new DatabaseAppliances { Id = editingItemId, Name = newDictValue, Description = newDictDesc };
+                if (editingItemId == 0) await Api.CreateAppliance(app);
+                else await Api.UpdateAppliance(editingItemId, app);
+            }
+            else if (currentModalType == 2)
+            {
+                var man = new DatabaseManufacturer { Id = editingItemId, Name = newDictValue, Description = newDictDesc, CountryID = selectedCountryForManufacturer };
+                if (editingItemId == 0) await Api.CreateManufacturer(man);
+                else await Api.UpdateManufacturer(editingItemId, man);
+            }
+            else if (currentModalType == 3)
+            {
+                var cnt = new DatabaseCountry { Id = editingItemId, Name = newDictValue };
+                if (editingItemId == 0) await Api.CreateCountry(cnt);
+                else await Api.UpdateCountry(editingItemId, cnt);
+            }
+
+            CloseModal();
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("alert", $"Ошибка при сохранении: {ex.Message}"); 
+        }
+    }
+
+    private async Task DeleteEntity(int type, int id)
+    {
+        bool confirm = await JS.InvokeAsync<bool>("confirm", "Удалить запись?");
+        if (confirm)
+        {
+            if (type == 1) await Api.DeleteAppliance(id);
+            if (type == 2) await Api.DeleteManufacturer(id);
+            if (type == 3) await Api.DeleteCountry(id);
+            await LoadData();
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (hubConnection is not null)
+        {
+            await hubConnection.DisposeAsync();
+        }
+    }
+}
